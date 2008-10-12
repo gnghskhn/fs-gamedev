@@ -69,7 +69,7 @@ let gravity (vec_ops: VecOps<'a, 'b>) =
 
 
 let spring (vec_ops: VecOps<'a, 'b>) stiff pos =
-    vec_ops.scale stiff pos
+    vec_ops.scale -stiff pos
 
      
 let drag (vec_ops: VecOps<'a, 'b>) k speed =
@@ -130,7 +130,7 @@ let run euler_func s0 =
     let delta = 0.005
 
     let run_timed map_func = 
-        let n_runs = 1
+        let n_runs = 3
         let times =
             [
                 for i in 1..n_runs ->
@@ -158,7 +158,7 @@ let accel (vec_ops: VecOps<'a, 'b>) (pos: 'a) (speed: 'a) =
     vec_ops.add (spring vec_ops 100.0 pos)
         (vec_ops.add (drag vec_ops 1.0 speed) (gravity vec_ops))
 
-let n_bodies = 10
+let n_bodies = 100
 
 let s0_Vec1d = [ for s in 1..n_bodies -> (Vec1d(float s), Vec1d(0.0)) ]
 let ef_Vec1d = euler_implicit Vec1D_ops (accel Vec1D_ops)
