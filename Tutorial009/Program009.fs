@@ -26,14 +26,20 @@ type ps<'num> = struct
     val speed:'num
     new(pos, speed) = { pos = pos; speed = speed }
 end
+
+type sa<'num> = struct
+    val speed:'num
+    val accel:'num
+    new(speed, accel) = { speed = speed; accel = accel; }
+end
     
 type Vec1d = struct
     val x: float
     
     new (x) = { x = x }
     
-    static member plus (a: Vec1d) (b: Vec1d) = Vec1d(a.x + b.x)
-    static member scale (k: float) (a: Vec1d) = Vec1d(k * a.x)
+    static member plus ((a: Vec1d), (b: Vec1d)) = Vec1d(a.x + b.x)
+    static member scale ((k: float), (a: Vec1d)) = Vec1d(k * a.x)
 end
 
 
@@ -43,8 +49,8 @@ type Vec2d = struct
     
     new (x, y) = { x = x; y = y }
     
-    static member plus (a: Vec2d) (b: Vec2d) = Vec2d(a.x + b.x, a.y + b.y)
-    static member scale (k: float) (a: Vec2d) = Vec2d(k * a.x, k * a.y)
+    static member plus ((a: Vec2d), (b: Vec2d)) = Vec2d(a.x + b.x, a.y + b.y)
+    static member scale ((k: float), (a: Vec2d)) = Vec2d(k * a.x, k * a.y)
 end
 
 
@@ -55,16 +61,16 @@ type Vec3d = struct
     
     new (x, y, z) = { x = x; y = y; z = z }
     
-    static member plus (a: Vec3d) (b: Vec3d) = Vec3d(a.x + b.x, a.y + b.y, a.z + b.z)
-    static member scale (k: float) (a: Vec3d) = Vec3d(k * a.x, k * a.y, k * a.z)
+    static member plus ((a: Vec3d), (b: Vec3d)) = Vec3d(a.x + b.x, a.y + b.y, a.z + b.z)
+    static member scale ((k: float), (a: Vec3d)) = Vec3d(k * a.x, k * a.y, k * a.z)
 end
 
 
 type CVec1d (x: float) = class
     member v.X = x
 
-    static member plus (a: CVec1d) (b: CVec1d) = CVec1d(a.X + b.X)
-    static member scale (k: float) (a: CVec1d) = CVec1d(k * a.X)
+    static member plus ((a: CVec1d), (b: CVec1d)) = CVec1d(a.X + b.X)
+    static member scale ((k: float), (a: CVec1d)) = CVec1d(k * a.X)
 end
 
 
@@ -72,8 +78,8 @@ type CVec2d (x: float, y:float) = class
     member v.X = x
     member v.Y = y
 
-    static member plus (a: CVec2d) (b: CVec2d) = CVec2d(a.X + b.X, a.Y + b.Y)
-    static member scale (k: float) (a: CVec2d) = CVec2d(k * a.X, k * a.Y)
+    static member plus ((a: CVec2d), (b: CVec2d)) = CVec2d(a.X + b.X, a.Y + b.Y)
+    static member scale ((k: float), (a: CVec2d)) = CVec2d(k * a.X, k * a.Y)
 end
 
 
@@ -82,8 +88,8 @@ type CVec3d (x: float, y: float, z: float) = class
     member v.Y = y
     member v.Z = z
     
-    static member plus (a: CVec3d) (b: CVec3d) = CVec3d(a.X + b.X, a.Y + b.Y, a.Z + b.Z)
-    static member scale (k: float) (a: CVec3d) = CVec3d(k * a.X, k * a.Y, k * a.Z)
+    static member plus ((a: CVec3d), (b: CVec3d)) = CVec3d(a.X + b.X, a.Y + b.Y, a.Z + b.Z)
+    static member scale ((k: float), (a: CVec3d)) = CVec3d(k * a.X, k * a.Y, k * a.Z)
 end
 
     
@@ -91,20 +97,19 @@ let gravity =
     -9.81
 
 
-let inline spring (pos: ^vec) =
-    let (*) k x = (^vec: (static member scale: float -> ^vec -> ^vec) k) x
-    let k = 100.0
+let inline spring k (pos: ^vec) =
+    let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
     -k * pos
 
 
 let inline drag k (pos: ^pos) (speed: ^pos) =
-    let (*) k x = (^vec: (static member scale: float -> ^vec -> ^vec) k) x
+    let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
     -k * speed
 
 
 let inline euler_implicit accel_func (pos: ^vec) (speed: ^vec) delta =
-    let (+) x y = (^vec: (static member plus: ^vec -> ^vec -> ^vec) x) y
-    let (*) k x = (^vec: (static member scale: float -> ^vec -> ^vec) k) x
+    let (+) x y = (^vec: (static member plus: ^vec * ^vec -> ^vec) x, y)
+    let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
     
     let speed2 = speed + (delta * (accel_func pos speed))    
     let pos2 = pos + (delta * speed2)        
@@ -113,22 +118,22 @@ let inline euler_implicit accel_func (pos: ^vec) (speed: ^vec) delta =
 
 let adapt (f: 'num -> 'num -> 'num) pos speed = 
     let accel = f pos speed
-    speed, accel
+    sa<_>(speed, accel)
 
 
 let inline runge_kutta_4 deriv_func (pos: ^vec) (speed:  ^vec) delta =
-    let add x y = (^vec: (static member plus: ^vec -> ^vec -> ^vec) x) y
-    let scale k x = (^vec: (static member scale: float -> ^vec -> ^vec) k) x
+    let add x y = (^vec: (static member plus: ^vec * ^vec -> ^vec) x, y)
+    let scale k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
     
     let extrapolate x delta dx = 
         add x (scale delta dx)
 
     let half_delta = 0.5 * delta
          
-    let s1, a1 = deriv_func pos speed
-    let s2, a2 = deriv_func (extrapolate pos half_delta s1) (extrapolate speed half_delta a1)
-    let s3, a3 = deriv_func (extrapolate pos half_delta s2) (extrapolate speed half_delta a2)
-    let s4, a4 = deriv_func (extrapolate pos delta s3)      (extrapolate speed delta a3)
+    let sa1: sa<_> = deriv_func pos speed
+    let sa2 = deriv_func (extrapolate pos half_delta sa1.speed) (extrapolate speed half_delta sa1.accel)
+    let sa3 = deriv_func (extrapolate pos half_delta sa2.speed) (extrapolate speed half_delta sa2.accel)
+    let sa4 = deriv_func (extrapolate pos delta sa3.speed)      (extrapolate speed delta sa3.accel)
 
     let sixth_delta = delta / 6.0    
 
@@ -137,8 +142,8 @@ let inline runge_kutta_4 deriv_func (pos: ^vec) (speed:  ^vec) delta =
         let (+) u v = add u v
         old + sixth_delta * (v1 + 2.0 * (v2 + v3) + v4)
                              
-    let pos1 = update pos s1 s2 s3 s4
-    let speed1 = update speed a1 a2 a3 a4
+    let pos1 = update pos sa1.speed sa2.speed sa3.speed sa4.speed
+    let speed1 = update speed sa1.accel sa2.accel sa3.accel sa4.accel
     ps<_>(pos1, speed1)
 
 
@@ -154,9 +159,9 @@ let simulate intg_func t0 t_fin delta pos0 speed0 =
     
 
 let inline accel (up: ^vec) (pos: ^vec) (speed: ^vec) =
-    let (+) x y = (^vec: (static member plus: ^vec -> ^vec -> ^vec) x) y
-    let (*) k x = (^vec: (static member scale: float -> ^vec -> ^vec) k) x
-    (drag 1.0 pos speed) + (spring pos) + (gravity * up)
+    let (+) x y = (^vec: (static member plus: ^vec * ^vec -> ^vec) x, y)
+    let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
+    (drag 1.0 pos speed) + (spring 100.0 pos) + (gravity * up)
 
 
 let run euler_func s0 =
