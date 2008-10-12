@@ -78,7 +78,7 @@ let inline gravity (vec_ops: VecOps<'a, 'b>) =
 
 
 let inline spring (vec_ops: VecOps<'a, 'b>) stiff pos =
-    vec_ops.scale (stiff, pos)
+    vec_ops.scale (-stiff, pos)
 
      
 let inline drag (vec_ops: VecOps<'a, 'b>) k speed =
@@ -166,7 +166,7 @@ let inline accel (vec_ops: VecOps<'a, 'b>) (pos: 'a) (speed: 'a) =
     let (+) u v = vec_ops.add(u, v)
     (spring vec_ops 100.0 pos) + (drag vec_ops 1.0 speed) + (gravity vec_ops)
 
-let n_bodies = 10
+let n_bodies = 100
 
 let accel1D x y = accel Vec1D_ops x y
 let accel1D' x y = adapt accel1D x y
