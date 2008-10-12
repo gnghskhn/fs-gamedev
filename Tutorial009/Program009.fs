@@ -102,7 +102,7 @@ let inline spring k (pos: ^vec) =
     -k * pos
 
 
-let inline drag k (pos: ^pos) (speed: ^pos) =
+let inline drag k (speed: ^vec) =
     let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
     -k * speed
 
@@ -161,7 +161,7 @@ let simulate intg_func t0 t_fin delta pos0 speed0 =
 let inline accel (up: ^vec) (pos: ^vec) (speed: ^vec) =
     let (+) x y = (^vec: (static member plus: ^vec * ^vec -> ^vec) x, y)
     let (*) k x = (^vec: (static member scale: float * ^vec -> ^vec) k, x)
-    (drag 1.0 pos speed) + (spring 100.0 pos) + (gravity * up)
+    (drag 1.0 speed) + (spring 100.0 pos) + (gravity * up)
 
 
 let run euler_func s0 =
