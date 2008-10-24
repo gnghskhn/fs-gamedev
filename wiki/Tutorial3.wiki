@@ -34,8 +34,9 @@ Console.ReadKey(true)
 
 Here come the explanations, focused on the new function "simulate":
 
+{{{
 let rec simulate t0 t_fin delta pos0 speed0 accel =
-
+}}}
 This defines a recursive function named "simulate". Recursion is used as a substitute for looping. I will not explain recursion here. It is simple in essence, but can be hard to grasp at first for someone used to think in C. Note that "rec" in "let rec simulate" is used to tell the compiler that "simulate" calls itself. Follows a list of parameters:
   * t0 is the initial time when the simulation starts,
   * t_fin is the final time when the simulation finishes,
