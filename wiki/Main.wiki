@@ -3,3 +3,4 @@
   * [Tutorial1]: Hellow world!
   * [Tutorial2]: Simple functions
   * [Tutorial3]: Looping
+  * [Tutorial4]: Manipulating functions
