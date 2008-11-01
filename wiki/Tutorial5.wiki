@@ -72,15 +72,15 @@ Before diving into the explanations, let us have a look at the definition of Run
 
     Let an initial value problem be specified as follows.
 
-        y' = f(t, y), \quad y(t_0) = y_0. 
+        [http://upload.wikimedia.org/math/7/3/6/73654ee739d62e6612a2357db9d044f6.png]
 
     Then, the RK4 method for this problem is given by the following equations:
 
-        \begin{align} y_{n+1} &= y_n + {h \over 6} \left(k_1 + 2k_2 + 2k_3 + k_4 \right) \\ t_{n+1} &= t_n + h \\ \end{align}
+        [http://upload.wikimedia.org/math/0/4/9/049a79910042e7b201b0c458ae649a8e.png]
 
     where yn + 1 is the RK4 approximation of y(tn + 1), and
 
-        \begin{align} k_1 &= f \left( t_n, y_n \right) \\ k_2 &= f \left( t_n + {h \over 2}, y_n + {h \over 2} k_1\right) \\ k_3 &= f \left( t_n + {h \over 2}, y_n + {h \over 2} k_2\right) \\ k_4 &= f \left( t_n + h, y_n + h k_3 \right) \\ \end{align}
+        [http://upload.wikimedia.org/math/6/c/4/6c44aec9cdaee43dd8f2cd50c2b41afa.png]
 
 In the context of this tutorial, function "f" can be seen as a function computing the speed and the acceleration, depending on the current time "t" and the current position and speed "y". Actually, in this tutorial, the forces do not depend on the current time, and the first parameter of "f" is therefore omitted.
 Using a functional language like F# to implement Runge-Kutta 4 (RK4 for short) is particularly fitting, as the function "f" is an input to the algorithm. It seems easy to implement this algorithm using a function taking a function "f", and indeed it is:
@@ -128,4 +128,4 @@ let (pos_fin, speed_fin) = simulate (euler_implicit accel) t0 t_fin delta pos sp
 Here is the beautiful bit: the main program calls simulate, passing the integration method ("euler_implicit"). The simulation function is generic enough to work independently of the integration method.
 Notice also how "(euler_implicit accel)" is passed as an argument, which is a function built by "plugging" the "accel" function into "euler_implicit". The "simulate" function never sees the "accel" function.
 
-This tutorial also shows how to time the execution of the program using a function from the .NET framework. I have implemented RK4 in C++ in order to compare the execution times. The C++ implementation outperforms the F# version by a factor of 10, but Tutorial6 shows how to optimize the F# version without sacrificing functional purity.
+This tutorial also shows how to time the execution of the program using a function from the .NET framework. I have implemented RK4 in C++ in order to compare the execution times. The C++ implementation outperforms the F# version by a factor of 10, but [Tutorial6] shows how to optimize the F# version without sacrificing functional purity.
