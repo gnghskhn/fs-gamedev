@@ -25,8 +25,6 @@ THE SOFTWARE.
  *
  * TODO:
  * Using UUID for references.
- * Top-level parsing functions.
- * Lexers (text, then maybe binary and compressed).
  * .NET-friendly API to initiate parsing and access the parsed data.
  *)
 
@@ -34,13 +32,13 @@ open XLexers
 
 
 // Type of functions parsing parts of data.
-type ComponentParser<'Src> = ILexer<'Src> -> 'Src -> (obj * 'Src) option
+type ComponentParser<'Src> = LexerFuncs<'Src> -> 'Src -> (obj * 'Src) option
 
 
 // Used to represent data.
 type Record = {
     type_name  : string
-    components : Map<string, obj>;
+    components : Map<string, obj>
     children   : SubRecord list
 }
 and SubRecord =
@@ -58,7 +56,7 @@ type Record with
     
 
 // Type of functions parsing data.    
-type DataParser<'Src> = ILexer<'Src> -> 'Src -> Record -> (Record * 'Src) option
+type DataParser<'Src> = LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) option
 
 
 (*
@@ -84,10 +82,12 @@ let RestrictionParser (restriction : Map<string, DataParser<'Src>>) : DataParser
         match lexer.NextToken src with
         // Nested data
         | Some(NAME(name), src) ->
+            printfn ">>> RestrictionParser %s ?" name
             match lexer.Expect src [OBRACE] with
             | Some(src) ->
                 match restriction.TryFind(name) with
                 | Some(parser) ->
+                    printfn ">>> RestrictionParser found %s" name
                     match parser lexer src (Record.empty.SetName(name)) with
                     | Some(child, src) -> Some(record.AddChild(Nested(child)), src) |> lexer.MaybeExpect [CBRACE]
                     | _                -> None
@@ -195,7 +195,7 @@ let NamedComponentParser name (comp_parser_func : ComponentParser<'Src>) : DataP
 
 
 // Parses the body of a template definition. Returns a DataParser, which is used in the second phase when data is parsed.
-let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataParser<'Src>>) =
+let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, DataParser<'Src>>) =
     (*
      * Various helper functions and values. See below "Execution starts here" to see where things happen.
      *)
@@ -211,6 +211,9 @@ let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataPa
     
     // Parses a line starting with FLOAT, DOUBLE.
     let mkFloatItemParser = parseLine FloatParser
+    
+    // Parses a line starting with CSTRING.
+    let mkStringItemParser = parseLine StringParser
     
     // Parses a line starting with the name of a template.
     let mkUserItemParser user_type =
@@ -229,6 +232,7 @@ let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataPa
             | Some(SDWORD, src) -> Some(IntParser, src)
             | Some(FLOAT, src) -> Some(FloatParser, src)
             | Some(DOUBLE, src) -> Some(FloatParser, src)
+            | Some(NSTRING, src) -> Some(StringParser, src)
             | Some(NAME(user_type), src) ->
                 match env.TryFind(user_type) with
                 | Some(p) -> Some(DataToComponentParser user_type p, src)
@@ -259,32 +263,47 @@ let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataPa
 
     // Parses a restriction [...] or [name1, name2...]
     let parseRestriction src =
-        let rec loop src (restriction : Map<string,_>)=
+        let rec loop src restriction =
             match lexer.NextToken src with
             | Some(CBRACKET, src) -> Some(restriction, src)
-            | Some(COMMA, src) ->
+            | Some(COMMA, src) -> parseName src restriction
+            | _ -> None
+
+        and parseName src (restriction : Map<string,_>) =
+            let after_name =
                 match lexer.NextToken src with
                 | Some(NAME(name), src) ->
-                    match env.TryFind(name) with
-                    | Some(parser) -> loop src (restriction.Add(name, parser))
+                    match lexer.NextToken src with
+                    // Ignore the optional <UUID> part
+                    | Some(OANGLE, src) ->
+                        match lexer.NextToken src with
+                        | Some(UUID(_), src) -> 
+                            match lexer.Expect src [CANGLE] with
+                            | Some(src) -> Some(name, src)
+                            | None -> None
+                        | _ -> None
+                    | Some(_, _) -> Some(name, src)
                     | None -> None
-                // TODO: handle optional UUID.
                 | _ -> None
-            | _ -> None
+            
+            match after_name with
+            | Some(name, src) ->
+                match env.TryFind(name) with
+                | Some(parser) -> loop src (restriction.Add(name, parser))
+                | None -> None
+            | None -> None
+            
             
         match lexer.NextToken src with
         | Some(DOT, src) ->
             match lexer.Expect src [DOT; DOT; CBRACKET] with
             | Some(src) -> Some(OpenParser env, src)
             | _ -> None
-        | Some(NAME(name), src) ->
-            match env.TryFind(name) with
-            | Some(parser) ->
-                match loop src (Map.empty.Add(name, parser)) with
-                | Some(restriction, src) -> Some(RestrictionParser restriction, src)
-                | _ -> None
-            | None -> None
-        | _ -> None
+        | _ ->
+            match parseName src Map.empty with
+            | Some(restriction, src) -> Some(RestrictionParser restriction, src)
+            | _ -> None
+
             
     // Function calling parseTemplateContent. It is not tail-recursive, but that should not be a problem.        
     let next maybe_parser_src =
@@ -304,6 +323,7 @@ let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataPa
     | Some(SDWORD, src) -> mkIntItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(FLOAT, src) -> mkFloatItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(DOUBLE, src) -> mkFloatItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
+    | Some(NSTRING, src) -> mkStringItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(ARRAY, src) -> parseArray src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(NAME(user_type), src) -> mkUserItemParser user_type src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(OBRACKET, src) -> parseRestriction src |> lexer.MaybeExpect [CBRACE]
@@ -311,7 +331,7 @@ let rec parseTemplateContent (lexer: ILexer<'Src>) src (env : Map<string, DataPa
         
 
 // Parses a template. Calls parseTemplateContent, which does all the work.
-let parseTemplate (lexer: ILexer<'Src>) src env =
+let parseTemplate (lexer: LexerFuncs<'Src>) src env =
     match lexer.NextToken src with
     | Some(TEMPLATE, src) ->
         match lexer.NextToken src with
@@ -333,7 +353,7 @@ let parseTemplate (lexer: ILexer<'Src>) src env =
 
 
 // Parse data. env is a mapping from template names to DataParsers, created in parseTemplateContent.
-let parseData (lexer : ILexer<'Src>) src (env : Map<string, DataParser<'Src>>) : ((string option * Record) list * 'Src) option=
+let parseData (lexer : LexerFuncs<'Src>) src (env : Map<string, DataParser<'Src>>) : ((string option * Record) list * 'Src) option=
     let rec loop src records =
         match lexer.NextToken src with
         | Some(NAME(name), src) ->
@@ -356,7 +376,24 @@ let parseData (lexer : ILexer<'Src>) src (env : Map<string, DataParser<'Src>>) :
     | Some(l, src) -> Some(List.rev l, src)
     | None -> None 
 
+
+// Parse the entire file.
+let parse (lexer : LexerFuncs<'Src>) src : (string option * Record) list option =
+    // Function parsing all templates
+    let rec loop src parsers =
+        match parseTemplate lexer src parsers with
+        | Some(parsers, src) -> loop src parsers
+        | None -> parsers, src
     
+    // First parse all templates
+    let env, src = loop src Map.empty
+    
+    // Then parse the data
+    match parseData lexer src env |> lexer.MaybeExpect [EOF] with
+    | Some(value, _) -> Some value
+    | None -> None
+    
+            
 let testTemplate src1 src2 =
     let lexer = DebugLexer
     
