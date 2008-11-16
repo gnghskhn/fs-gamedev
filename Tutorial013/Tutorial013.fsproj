@@ -8,7 +8,7 @@
     <ProjectGuid>{07ada1bd-574a-4b5a-9c50-3034db186d1a}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>Tutorial013</RootNamespace>
-    <AssemblyName>Tutorial013</AssemblyName>
+    <AssemblyName>dumpx</AssemblyName>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Name>Tutorial013</Name>
@@ -30,9 +30,13 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>3</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <StartArguments>-f "C:\Documents and Settings\johann\Skrivbord\formula1\formula1.X"</StartArguments>
+  </PropertyGroup>
   <ItemGroup>
-    <Content Include="TextLexer.fsl" />
+    <None Include="TextLexer.fsl" />
     <Compile Include="XLexers.fs" />
+    <Compile Include="TextLexer.fs" />
     <Compile Include="XParser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
