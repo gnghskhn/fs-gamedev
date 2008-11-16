@@ -50,10 +50,11 @@ rule token = parse
 | "LPSTR" { LPSTR }
 | "UNICODE" { UNICODE }
 | "CSTRING" { CSTRING }
-| "ARRAY" { ARRAY }
-| ident { NAME(Lexing.lexeme lexbuf)) }
+| "STRING" { NSTRING }
+| "array" { ARRAY }
+| ident { NAME(Lexing.lexeme lexbuf) }
 | str { let s = Lexing.lexeme lexbuf in STRING(s.Substring(1, s.Length - 2)) }
-| uuid { UUID(Lexing.lexeme) }
+| uuid { UUID(Lexing.lexeme lexbuf) }
 | white { token lexbuf }
 | eof { EOF }
 | '{' { OBRACE }
