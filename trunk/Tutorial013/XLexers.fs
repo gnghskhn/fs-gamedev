@@ -53,43 +53,50 @@ type Token =
     | LPSTR
     | UNICODE
     | CSTRING
+    | NSTRING
     | ARRAY
     | EOF
 
 
-// Lexer interface
-type ILexer<'Src> =
-    abstract NextToken : 'Src -> (Token * 'Src) option
-    abstract Expect : 'Src -> Token list -> 'Src option
-    abstract MaybeExpect : Token list -> ('a * 'Src) option -> ('a * 'Src) option
+// Type of functions returning tokens
+type Lexer<'Src> = 'Src -> (Token * 'Src) option
+
+
+// Expect a sequence of tokens
+let expect nextToken (src : 'Src) (tokens : Token list) =
+    let rec work src tokens =
+        match tokens with
+        | [] -> Some src
+        | tok :: toks ->
+            match nextToken src with
+            | Some(head, rest) ->
+                if head = tok then work rest toks
+                else None
+            | None -> None
+    work src tokens
+
+
+// Expect a sequence of tokens, passing data along.
+let maybeExpect nextToken (tokens : Token list) (in_data : ('a * 'Src) option) =
+    match in_data with
+    | Some(smthing, src) ->
+        match expect nextToken src tokens with
+        | Some(src) -> Some(smthing, src)
+        | None -> None
+    | None -> None
     
 
 // A lexer working on a list of Tokens. Useful for testing and debugging the parser.    
-let DebugLexer = {
-    new ILexer<Token list> with
-        member x.NextToken src =
-            match src with
-            | [] -> None
-            | head :: rest -> Some(head, rest)
-            
-        member x.Expect src tokens =
-            let rec work src tokens =
-                match src, tokens with
-                | (head :: rest), (tok :: toks) ->
-                    if head = tok then
-                        match work rest toks with
-                        | None -> None
-                        | _ as src -> src
-                    else None
-                | _ as src, [] -> Some src
-                | [], (tok :: toks) -> None
-            work src tokens
-            
-        member x.MaybeExpect tokens src =
-            match src with
-            | Some(smthing, src) ->
-                match x.Expect src tokens with
-                | Some(src) -> Some(smthing, src)
-                | None -> None
-            | None -> None
-}
+let nextTokenList src =
+    match src with
+    | [] -> None
+    | head :: rest -> Some(head, rest)
+
+
+type LexerFuncs<'Src>(lexer : Lexer<'Src>) = 
+    member x.NextToken src = lexer src
+    member x.Expect src tokens = expect lexer src tokens
+    member x.MaybeExpect tokens in_data = maybeExpect lexer tokens in_data
+
+
+let DebugLexer = new LexerFuncs<_>(nextTokenList)
