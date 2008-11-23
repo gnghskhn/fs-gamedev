@@ -29,9 +29,9 @@ open XLexers
 let num = ['0'-'9']+
 let intNum = '-'? num
 let floatNum = '-'? num ('.' num)? (['e' 'E'] num)?
-let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '-']*
 let str = '"' [^ '"']* '"'
-let uuid = ['a'-'z' 'A'-'Z' '0'-'9']+ ('-' ['a'-'z' 'A'-'Z' '0'-'9']+)+
+let uuid = '<' ['a'-'f' 'A'-'F' '0'-'9']+ ('-' ['a'-'z' 'A'-'Z' '0'-'9']+)+ '>'
 let white = ' ' | '\t' | '\n' | '\r'
 
 rule token = parse
