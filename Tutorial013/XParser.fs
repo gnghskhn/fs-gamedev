@@ -31,10 +31,6 @@ THE SOFTWARE.
 open XLexers
 
 
-// Type of functions parsing parts of data.
-type ComponentParser<'Src> = LexerFuncs<'Src> -> 'Src -> (obj * 'Src) option
-
-
 // Used to represent data.
 type Record = {
     type_name  : string
@@ -55,8 +51,13 @@ type Record with
     member x.AddChild(child) = let children = child :: x.children in { x with children = children }
     
 
-// Type of functions parsing data.    
-type DataParser<'Src> = LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) option
+// Type of functions parsing records.
+type DataParser<'Src> = DataParser of (Env<'Src> -> LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) option)
+and Env<'Src> = Map<string, DataParser<'Src>>
+
+
+// Type of functions parsing parts of records.
+type ComponentParser<'Src> = Env<'Src> -> LexerFuncs<'Src> -> 'Src -> (obj * 'Src) option
 
 
 (*
@@ -65,20 +66,22 @@ type DataParser<'Src> = LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) op
  
 // Does no parsing, return the record untouched
 let EmptyDataParser : DataParser<'Src> =
-    fun lexer src record -> Some(record, src)
+    let f _ lexer src record = Some(record, src)
+    DataParser f
 
 
 // Parses a ";", returns the record untouched
 let SemiColonParser : DataParser<'Src> =
-    fun lexer src record ->
+    let f  _ (lexer : LexerFuncs<'Src>) src record =
         match lexer.Expect src [SEMICOLON] with
         | Some(src) -> Some(record, src)
         | None -> None
+    DataParser f
         
 
 // Parses exactly one piece of data, which must be of one of the types in 'restriction'
-let RestrictionParser (restriction : Map<string, DataParser<'Src>>) : DataParser<'Src> =
-    fun lexer src record ->
+let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
+    let f env (lexer : LexerFuncs<'Src>) src (record : Record) =
         match lexer.NextToken src with
         // Nested data
         | Some(NAME(name), src) ->
@@ -86,9 +89,9 @@ let RestrictionParser (restriction : Map<string, DataParser<'Src>>) : DataParser
             match lexer.Expect src [OBRACE] with
             | Some(src) ->
                 match restriction.TryFind(name) with
-                | Some(parser) ->
+                | Some(DataParser parser) ->
                     printfn ">>> RestrictionParser found %s" name
-                    match parser lexer src (Record.empty.SetName(name)) with
+                    match parser env lexer src (Record.empty.SetName(name)) with
                     | Some(child, src) -> Some(record.AddChild(Nested(child)), src) |> lexer.MaybeExpect [CBRACE]
                     | _                -> None
                 | None -> None
@@ -100,26 +103,30 @@ let RestrictionParser (restriction : Map<string, DataParser<'Src>>) : DataParser
             | _ as value -> printfn "Expected OBRACE got %A" value; None
         // TODO: Data reference using the UUID, or using name + UUID
         | _ -> None
+    DataParser f
     
 
 // Parses any number of data pieces, of any known type.
-let OpenParser (env : Map<string, DataParser<'Src>>) : DataParser<'Src> =
-    fun lexer src record ->
-        let parser = RestrictionParser env
-        let rec loop src record =
-            match parser lexer src record with
-            | None -> Some(record, src)
-            | Some(record, src) -> loop src record
-        loop src record
-            
+let OpenParser : DataParser<'Src> =
+    let f env lexer src record =
+        match RestrictionParser env with
+        | DataParser parser ->
+            let rec loop src record =
+                match parser env lexer src record with
+                | None -> Some(record, src)
+                | Some(record, src) -> loop src record
+            loop src record
+    DataParser f
 
 // Makes a parser that executes two parsers one after another.                
 let ComposeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>) : DataParser<'Src> =
-    fun lexer src record ->
-        match parser1 lexer src record with
-        | Some(record, src) -> parser2 lexer src record
-        | None              -> None
-
+    let f env lexer src record =
+        match parser1, parser2 with
+        | DataParser(parser1), DataParser(parser2) ->
+            match parser1 env lexer src record with
+            | Some(record, src) -> parser2 env lexer src record
+            | None              -> None
+    DataParser f
 
 // Infix operator for ComposeDataParsers   
 let (>>>>) parser1 parser2 =
@@ -132,33 +139,33 @@ let (>>>>) parser1 parser2 =
  
 // Parses an int, returns it, boxed.            
 let IntParser : ComponentParser<'Src> =
-    fun lexer src ->
+    fun _ lexer src ->
         match lexer.NextToken src with
         | Some(INTEGER(value), src) -> Some (box value, src)
         | _ -> None
         
 // Parses a float, returns it, boxed.             
 let FloatParser : ComponentParser<'Src> =
-    fun lexer src ->
+    fun _ lexer src ->
         match lexer.NextToken src with
         | Some(FLOATVAL(value), src) -> Some (box value, src)
         | _ -> None
         
 // Parses a string, returns it, boxed.             
 let StringParser : ComponentParser<'Src> =
-    fun lexer src ->
+    fun _ lexer src ->
         match lexer.NextToken src with
         | Some(STRING(value), src) -> Some(box value, src)
         | _ -> None
 
 // Parses an array, returns it, boxed.
 let ArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Src> =
-    fun lexer src ->
+    fun env lexer src ->
         let rec loop src values =
             match lexer.NextToken src with
             | Some(SEMICOLON, _) -> Some(values, src)
             | Some(COMMA, src) ->
-                match cell_parser_func lexer src with
+                match cell_parser_func env lexer src with
                 | Some(value, src) -> loop src (value :: values)
                 | None             -> None
             | _ -> None
@@ -167,7 +174,7 @@ let ArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Sr
             match lexer.NextToken src with
             | Some(SEMICOLON, _) -> Some([], src)
             | _ ->
-                match cell_parser_func lexer src with
+                match cell_parser_func env lexer src with
                 | Some(value, src) -> loop src [value]
                 | None             -> None
                 
@@ -176,26 +183,27 @@ let ArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Sr
             let arr = rev |> List.rev |> List.to_array
             Some(box arr, src)
         | None -> None
-        
 
-// Convert a DataParser to a ComponentParser, used for nested data.                 
-let DataToComponentParser template_name (parser: DataParser<'Src>) : ComponentParser<'Src> =
-    fun lexer src ->
-        match parser lexer src (Record.empty.SetName(template_name)) with
-        | Some(record, src) -> Some(box record, src)
-        | None              -> None
         
-
+let DataToComponentParser (data_parser : DataParser<'Src>) : ComponentParser<'Src> =
+    fun env lexer src ->
+        match data_parser with
+        | DataParser data_parser ->
+            match data_parser env lexer src Record.empty with
+            | Some(record, src) -> Some(box record, src)
+            | None -> None
+        
+        
 // Turn a ComponentParser to a DataParser. The boxed value is added in the Record with name 'name'        
 let NamedComponentParser name (comp_parser_func : ComponentParser<'Src>) : DataParser<'Src> =
-    fun lexer src record ->
-        match comp_parser_func lexer src with
+    fun env lexer src (record : Record) ->
+        match comp_parser_func env lexer src with
         | Some(value, src) -> Some(record.Add(name, value), src)
         | None             -> None
-
+    |> DataParser
 
 // Parses the body of a template definition. Returns a DataParser, which is used in the second phase when data is parsed.
-let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, DataParser<'Src>>) =
+let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<string, DataParser<'Src>>) =
     (*
      * Various helper functions and values. See below "Execution starts here" to see where things happen.
      *)
@@ -218,7 +226,7 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, Da
     // Parses a line starting with the name of a template.
     let mkUserItemParser user_type =
         match env.TryFind(user_type) with
-        | Some(p) -> parseLine (DataToComponentParser user_type p)
+        | Some(p) -> parseLine (DataToComponentParser p)
         | None -> fun _ -> None
 
     // Parses an array declaration.
@@ -235,8 +243,8 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, Da
             | Some(NSTRING, src) -> Some(StringParser, src)
             | Some(NAME(user_type), src) ->
                 match env.TryFind(user_type) with
-                | Some(p) -> Some(DataToComponentParser user_type p, src)
-                | None -> Some((fun lexer -> fun src -> None), src)
+                | Some(p) -> Some(DataToComponentParser p, src)
+                | None -> Some((fun env lexer src -> None), src)
             | _ -> None
         
         // Rest of the declaration: some_name[42]
@@ -275,13 +283,7 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, Da
                 | Some(NAME(name), src) ->
                     match lexer.NextToken src with
                     // Ignore the optional <UUID> part
-                    | Some(OANGLE, src) ->
-                        match lexer.NextToken src with
-                        | Some(UUID(_), src) -> 
-                            match lexer.Expect src [CANGLE] with
-                            | Some(src) -> Some(name, src)
-                            | None -> None
-                        | _ -> None
+                    | Some(UUID(_), src) -> Some(name, src)
                     | Some(_, _) -> Some(name, src)
                     | None -> None
                 | _ -> None
@@ -297,7 +299,7 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, Da
         match lexer.NextToken src with
         | Some(DOT, src) ->
             match lexer.Expect src [DOT; DOT; CBRACKET] with
-            | Some(src) -> Some(OpenParser env, src)
+            | Some(src) -> Some(OpenParser, src)
             | _ -> None
         | _ ->
             match parseName src Map.empty with
@@ -331,20 +333,17 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) src (env : Map<string, Da
         
 
 // Parses a template. Calls parseTemplateContent, which does all the work.
-let parseTemplate (lexer: LexerFuncs<'Src>) src env =
+let parseTemplate (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Env<'Src>) =
     match lexer.NextToken src with
     | Some(TEMPLATE, src) ->
         match lexer.NextToken src with
         | Some(NAME(name), src) ->            
-            match lexer.Expect src [OBRACE; OANGLE] with
+            match lexer.Expect src [OBRACE] with
             | Some(src) ->
                 match lexer.NextToken src with
                 | Some (UUID(_), src) ->
-                    match lexer.Expect src [CANGLE] with
-                    | Some(src) -> 
-                        match parseTemplateContent lexer src env with
-                        | Some(tpl, src) -> Some(env.Add(name, tpl), src)
-                        | _ -> None
+                    match parseTemplateContent lexer src env with
+                    | Some(tpl, src) -> Some(env.Add(name, tpl), src)
                     | _ -> None
                 | _ -> None
             | _ -> None
@@ -364,8 +363,8 @@ let parseData (lexer : LexerFuncs<'Src>) src (env : Map<string, DataParser<'Src>
             match lexer.Expect src [OBRACE] with
             | Some(src) ->
                 match env.TryFind(name) with
-                | Some(parser) ->
-                    match parser lexer src (Record.empty.SetName(name)) |> lexer.MaybeExpect [CBRACE] with
+                | Some(DataParser parser) ->
+                    match parser env lexer src (Record.empty.SetName(name)) |> lexer.MaybeExpect [CBRACE] with
                     | Some(record, src) -> loop src ((data_name, record) :: records)
                     | None -> None
                 | None -> None
@@ -416,7 +415,7 @@ let testTemplate src1 src2 =
 
 let test1 _ =
     let src = [TEMPLATE; NAME("template"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                CBRACE]
     let data_src = [NAME("template"); OBRACE; CBRACE]
     testTemplate src data_src
@@ -424,7 +423,7 @@ let test1 _ =
 
 let test2 _ =
     let src = [TEMPLATE; NAME("template"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("u"); SEMICOLON;
                DWORD; NAME("v"); SEMICOLON;
                CBRACE]
@@ -437,7 +436,7 @@ let test2 _ =
     
 let test3 _ =
     let src = [TEMPLATE; NAME("template"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                DWORD; NAME("n"); SEMICOLON;
                ARRAY; FLOAT; NAME("arr"); OBRACKET; NAME("n"); CBRACKET; SEMICOLON;
                CBRACE]
@@ -450,12 +449,12 @@ let test3 _ =
 
 let test4 _ =
     let src = [TEMPLATE; NAME("Vec2D"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("x"); SEMICOLON;
                FLOAT; NAME("y"); SEMICOLON;
                CBRACE;
                TEMPLATE; NAME("Vecs"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                WORD; NAME("n_items"); SEMICOLON;
                ARRAY; NAME("Vec2D"); NAME("items"); OBRACKET; NAME("n_items"); CBRACKET; SEMICOLON;
                CBRACE]
@@ -469,15 +468,15 @@ let test4 _ =
 
 let test5 _ =
     let src = [TEMPLATE; NAME("Data1"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("x"); SEMICOLON;
                CBRACE;
                TEMPLATE; NAME("Data2"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("y"); SEMICOLON;
                CBRACE;
                TEMPLATE; NAME("Open"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                OBRACKET; DOT; DOT; DOT; CBRACKET;
                CBRACE]
     let data_src = [NAME("Open"); OBRACE;
@@ -499,15 +498,15 @@ let test5 _ =
 
 let test6 _ =
     let src = [TEMPLATE; NAME("Data1"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("x"); SEMICOLON;
                CBRACE;
                TEMPLATE; NAME("Data2"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                FLOAT; NAME("y"); SEMICOLON;
                CBRACE;
                TEMPLATE; NAME("Restricted"); OBRACE;
-               OANGLE; UUID("UUID"); CANGLE;
+               UUID("UUID");
                OBRACKET; NAME("Data1"); COMMA; NAME("Data2"); CBRACKET;
                CBRACE]
     let data_src = [NAME("Restricted"); NAME("Named"); OBRACE;
