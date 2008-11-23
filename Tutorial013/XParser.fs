@@ -86,6 +86,11 @@ let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
         // Nested data
         | Some(NAME(name), src) ->
             printfn ">>> RestrictionParser %s ?" name
+            // Ignore the optional name
+            let src =
+                match lexer.NextToken src with
+                | Some(NAME(name), src) -> src
+                | _ -> src
             match lexer.Expect src [OBRACE] with
             | Some(src) ->
                 match restriction.TryFind(name) with
@@ -98,8 +103,9 @@ let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
             | None -> None
         // Data reference using the name
         | Some(OBRACE, src) ->
+            printfn ">>> Data reference"
             match lexer.NextToken src with
-            | Some(NAME(name), src) -> Some(record.AddChild(RefByName(name)), src) |> lexer.MaybeExpect [CBRACE]
+            | Some(NAME(name), src) -> printfn ">>>> to %s" name; Some(record.AddChild(RefByName(name)), src) |> lexer.MaybeExpect [CBRACE]
             | _ as value -> printfn "Expected OBRACE got %A" value; None
         // TODO: Data reference using the UUID, or using name + UUID
         | _ -> None
@@ -112,12 +118,28 @@ let OpenParser : DataParser<'Src> =
         match RestrictionParser env with
         | DataParser parser ->
             let rec loop src record =
+                eprintfn ">>> OpenParser: new iteration"
                 match parser env lexer src record with
                 | None -> Some(record, src)
                 | Some(record, src) -> loop src record
             loop src record
     DataParser f
 
+
+// Parses any number of data pieces, of given types.
+let LoopingRestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
+    let f env lexer src record =
+        match RestrictionParser restriction with
+        | DataParser parser ->
+            let rec loop src record =
+                eprintfn ">>> LoopingRestrictionParser: new iteration"
+                match parser env lexer src record with
+                | None -> Some(record, src)
+                | Some(record, src) -> loop src record
+            loop src record
+    DataParser f
+    
+    
 // Makes a parser that executes two parsers one after another.                
 let ComposeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>) : DataParser<'Src> =
     let f env lexer src record =
@@ -127,6 +149,7 @@ let ComposeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>)
             | Some(record, src) -> parser2 env lexer src record
             | None              -> None
     DataParser f
+
 
 // Infix operator for ComposeDataParsers   
 let (>>>>) parser1 parser2 =
@@ -303,7 +326,7 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
             | _ -> None
         | _ ->
             match parseName src Map.empty with
-            | Some(restriction, src) -> Some(RestrictionParser restriction, src)
+            | Some(restriction, src) -> Some(LoopingRestrictionParser restriction, src)
             | _ -> None
 
             
@@ -388,7 +411,8 @@ let parse (lexer : LexerFuncs<'Src>) src : (string option * Record) list option 
     let env, src = loop src Map.empty
     
     // Then parse the data
-    match parseData lexer src env |> lexer.MaybeExpect [EOF] with
+    let r = parseData lexer src env
+    match r |> lexer.MaybeExpect [EOF] with
     | Some(value, _) -> Some value
     | None -> None
     
