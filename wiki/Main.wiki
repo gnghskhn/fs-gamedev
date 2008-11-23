@@ -5,4 +5,5 @@
   * [Tutorial3]: Looping
   * [Tutorial4]: Manipulating functions
   * [Tutorial5]: Naive RK4
-  * [Tutorial6]: Optimized RK4
+  * [Tutorial6]: Concurrency
+  * [Tutorial7]: Optimized RK4
