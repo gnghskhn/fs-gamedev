@@ -1,7 +1,8 @@
 #summary Listing of tutorials
 
-  * [Tutorial1]: Hellow world!
+  * [Tutorial1]: Hello world!
   * [Tutorial2]: Simple functions
   * [Tutorial3]: Looping
   * [Tutorial4]: Manipulating functions
   * [Tutorial5]: Naive RK4
+  * [Tutorial6]: Optimized RK4
