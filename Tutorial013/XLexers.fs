@@ -69,10 +69,8 @@ let expect nextToken (src : 'Src) (tokens : Token list) =
         | [] -> Some src
         | tok :: toks ->
             match nextToken src with
-            | Some(head, rest) ->
-                if head = tok then work rest toks
-                else None
-            | None -> None
+            | Some(head, rest) when head = tok -> work rest toks
+            | _ -> None
     work src tokens
 
 

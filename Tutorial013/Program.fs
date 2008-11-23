@@ -37,13 +37,13 @@ let tokenStream filename =
         let lexbuf = Lexing.from_text_reader (new System.Text.ASCIIEncoding()) reader
         while not lexbuf.IsPastEndOfStream do
             match TextLexer.token lexbuf with
-            | XLexers.EOF -> yield! []
+            | XLexers.EOF as value -> yield! [value]
             | token -> yield token
         }
     |> LazyList.of_seq
     
 
-// A lexer working on a lzay list of Tokens. The list is constructed on the fly as the file is read
+// A lexer working on a lazy list of Tokens. The list is constructed on the fly as the file is read
 let nextTokenLazyList (debug : bool) (src : LazyList<XLexers.Token>) =
     match src with
     | LazyList.Nil -> None
@@ -52,7 +52,7 @@ let nextTokenLazyList (debug : bool) (src : LazyList<XLexers.Token>) =
         Some(head, rest)
     
 
-let LazyLexer = new XLexers.LexerFuncs<_>(nextTokenLazyList true)
+let LazyLexer = new XLexers.LexerFuncs<_>(nextTokenLazyList false)
 
         
 type ApplicationArgs = {

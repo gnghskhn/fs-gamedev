@@ -65,13 +65,13 @@ type ComponentParser<'Src> = Env<'Src> -> LexerFuncs<'Src> -> 'Src -> (obj * 'Sr
  *)
  
 // Does no parsing, return the record untouched
-let EmptyDataParser : DataParser<'Src> =
+let empty_data_parser : DataParser<'Src> =
     let f _ lexer src record = Some(record, src)
     DataParser f
 
 
 // Parses a ";", returns the record untouched
-let SemiColonParser : DataParser<'Src> =
+let semi_colon_parser : DataParser<'Src> =
     let f  _ (lexer : LexerFuncs<'Src>) src record =
         match lexer.Expect src [SEMICOLON] with
         | Some(src) -> Some(record, src)
@@ -80,12 +80,11 @@ let SemiColonParser : DataParser<'Src> =
         
 
 // Parses exactly one piece of data, which must be of one of the types in 'restriction'
-let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
+let mkOneRestrictedParser (restriction : Env<'Src>) : DataParser<'Src> =
     let f env (lexer : LexerFuncs<'Src>) src (record : Record) =
         match lexer.NextToken src with
         // Nested data
         | Some(NAME(name), src) ->
-            printfn ">>> RestrictionParser %s ?" name
             // Ignore the optional name
             let src =
                 match lexer.NextToken src with
@@ -95,7 +94,6 @@ let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
             | Some(src) ->
                 match restriction.TryFind(name) with
                 | Some(DataParser parser) ->
-                    printfn ">>> RestrictionParser found %s" name
                     match parser env lexer src (Record.empty.SetName(name)) with
                     | Some(child, src) -> Some(record.AddChild(Nested(child)), src) |> lexer.MaybeExpect [CBRACE]
                     | _                -> None
@@ -103,22 +101,20 @@ let RestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
             | None -> None
         // Data reference using the name
         | Some(OBRACE, src) ->
-            printfn ">>> Data reference"
             match lexer.NextToken src with
-            | Some(NAME(name), src) -> printfn ">>>> to %s" name; Some(record.AddChild(RefByName(name)), src) |> lexer.MaybeExpect [CBRACE]
-            | _ as value -> printfn "Expected OBRACE got %A" value; None
+            | Some(NAME(name), src) -> Some(record.AddChild(RefByName(name)), src) |> lexer.MaybeExpect [CBRACE]
+            | _ as value -> None
         // TODO: Data reference using the UUID, or using name + UUID
         | _ -> None
     DataParser f
     
 
 // Parses any number of data pieces, of any known type.
-let OpenParser : DataParser<'Src> =
+let open_parser : DataParser<'Src> =
     let f env lexer src record =
-        match RestrictionParser env with
+        match mkOneRestrictedParser env with
         | DataParser parser ->
             let rec loop src record =
-                eprintfn ">>> OpenParser: new iteration"
                 match parser env lexer src record with
                 | None -> Some(record, src)
                 | Some(record, src) -> loop src record
@@ -127,12 +123,11 @@ let OpenParser : DataParser<'Src> =
 
 
 // Parses any number of data pieces, of given types.
-let LoopingRestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
+let mkRestrictedParser (restriction : Env<'Src>) : DataParser<'Src> =
     let f env lexer src record =
-        match RestrictionParser restriction with
+        match mkOneRestrictedParser restriction with
         | DataParser parser ->
             let rec loop src record =
-                eprintfn ">>> LoopingRestrictionParser: new iteration"
                 match parser env lexer src record with
                 | None -> Some(record, src)
                 | Some(record, src) -> loop src record
@@ -141,7 +136,7 @@ let LoopingRestrictionParser (restriction : Env<'Src>) : DataParser<'Src> =
     
     
 // Makes a parser that executes two parsers one after another.                
-let ComposeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>) : DataParser<'Src> =
+let composeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>) : DataParser<'Src> =
     let f env lexer src record =
         match parser1, parser2 with
         | DataParser(parser1), DataParser(parser2) ->
@@ -151,9 +146,9 @@ let ComposeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>)
     DataParser f
 
 
-// Infix operator for ComposeDataParsers   
+// Infix operator for composeDataParsers   
 let (>>>>) parser1 parser2 =
-    ComposeDataParsers parser1 parser2
+    composeDataParsers parser1 parser2
     
 
 (*
@@ -161,28 +156,31 @@ let (>>>>) parser1 parser2 =
  *)
  
 // Parses an int, returns it, boxed.            
-let IntParser : ComponentParser<'Src> =
+let int_parser : ComponentParser<'Src> =
     fun _ lexer src ->
         match lexer.NextToken src with
         | Some(INTEGER(value), src) -> Some (box value, src)
         | _ -> None
+
         
 // Parses a float, returns it, boxed.             
-let FloatParser : ComponentParser<'Src> =
+let float_parser : ComponentParser<'Src> =
     fun _ lexer src ->
         match lexer.NextToken src with
         | Some(FLOATVAL(value), src) -> Some (box value, src)
         | _ -> None
+
         
 // Parses a string, returns it, boxed.             
-let StringParser : ComponentParser<'Src> =
+let string_parser : ComponentParser<'Src> =
     fun _ lexer src ->
         match lexer.NextToken src with
         | Some(STRING(value), src) -> Some(box value, src)
         | _ -> None
 
+
 // Parses an array, returns it, boxed.
-let ArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Src> =
+let mkArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Src> =
     fun env lexer src ->
         let rec loop src values =
             match lexer.NextToken src with
@@ -207,8 +205,9 @@ let ArrayParser (cell_parser_func : ComponentParser<'Src>) : ComponentParser<'Sr
             Some(box arr, src)
         | None -> None
 
+
         
-let DataToComponentParser (data_parser : DataParser<'Src>) : ComponentParser<'Src> =
+let convertDataToComponentParser (data_parser : DataParser<'Src>) : ComponentParser<'Src> =
     fun env lexer src ->
         match data_parser with
         | DataParser data_parser ->
@@ -218,12 +217,13 @@ let DataToComponentParser (data_parser : DataParser<'Src>) : ComponentParser<'Sr
         
         
 // Turn a ComponentParser to a DataParser. The boxed value is added in the Record with name 'name'        
-let NamedComponentParser name (comp_parser_func : ComponentParser<'Src>) : DataParser<'Src> =
+let convertComponentToDataParser name (comp_parser_func : ComponentParser<'Src>) : DataParser<'Src> =
     fun env lexer src (record : Record) ->
         match comp_parser_func env lexer src with
         | Some(value, src) -> Some(record.Add(name, value), src)
         | None             -> None
     |> DataParser
+
 
 // Parses the body of a template definition. Returns a DataParser, which is used in the second phase when data is parsed.
 let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<string, DataParser<'Src>>) =
@@ -234,22 +234,22 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
     let parseLine item_parser_func src =
         match lexer.NextToken src with
         | Some(NAME(name), src) ->
-            Some(NamedComponentParser name item_parser_func, src)
+            Some(convertComponentToDataParser name item_parser_func, src)
         | _ -> None
     
     // Parses a line starting with WORD, DWORD... any integral type.
-    let mkIntItemParser = parseLine IntParser
+    let mkIntItemParser = parseLine int_parser
     
     // Parses a line starting with FLOAT, DOUBLE.
-    let mkFloatItemParser = parseLine FloatParser
+    let mkFloatItemParser = parseLine float_parser
     
     // Parses a line starting with CSTRING.
-    let mkStringItemParser = parseLine StringParser
+    let mkStringItemParser = parseLine string_parser
     
     // Parses a line starting with the name of a template.
     let mkUserItemParser user_type =
         match env.TryFind(user_type) with
-        | Some(p) -> parseLine (DataToComponentParser p)
+        | Some(p) -> parseLine (convertDataToComponentParser p)
         | None -> fun _ -> None
 
     // Parses an array declaration.
@@ -257,16 +257,16 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
         // Create a parser for the cell type.
         let cell_parser_and_src =
             match lexer.NextToken src with
-            | Some(WORD, src) -> Some(IntParser, src)
-            | Some(DWORD, src) -> Some(IntParser, src)
-            | Some(SWORD, src) -> Some(IntParser, src)
-            | Some(SDWORD, src) -> Some(IntParser, src)
-            | Some(FLOAT, src) -> Some(FloatParser, src)
-            | Some(DOUBLE, src) -> Some(FloatParser, src)
-            | Some(NSTRING, src) -> Some(StringParser, src)
+            | Some(WORD, src) -> Some(int_parser, src)
+            | Some(DWORD, src) -> Some(int_parser, src)
+            | Some(SWORD, src) -> Some(int_parser, src)
+            | Some(SDWORD, src) -> Some(int_parser, src)
+            | Some(FLOAT, src) -> Some(float_parser, src)
+            | Some(DOUBLE, src) -> Some(float_parser, src)
+            | Some(NSTRING, src) -> Some(string_parser, src)
             | Some(NAME(user_type), src) ->
                 match env.TryFind(user_type) with
-                | Some(p) -> Some(DataToComponentParser p, src)
+                | Some(p) -> Some(convertDataToComponentParser p, src)
                 | None -> Some((fun env lexer src -> None), src)
             | _ -> None
         
@@ -285,7 +285,7 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
                             match lexer.Expect src [OBRACKET] with
                             | Some(_) -> failwith "multi-dimensional arrays are not supported"
                             | _ -> ()
-                            Some(NamedComponentParser name (ArrayParser cell_parser), src)
+                            Some(convertComponentToDataParser name (mkArrayParser cell_parser), src)
                         | _ -> None
                     | _ -> None
                 | _ -> None
@@ -322,11 +322,11 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
         match lexer.NextToken src with
         | Some(DOT, src) ->
             match lexer.Expect src [DOT; DOT; CBRACKET] with
-            | Some(src) -> Some(OpenParser, src)
+            | Some(src) -> Some(open_parser, src)
             | _ -> None
         | _ ->
             match parseName src Map.empty with
-            | Some(restriction, src) -> Some(LoopingRestrictionParser restriction, src)
+            | Some(restriction, src) -> Some(mkRestrictedParser restriction, src)
             | _ -> None
 
             
@@ -335,13 +335,13 @@ let rec parseTemplateContent (lexer: LexerFuncs<'Src>) (src : 'Src) (env : Map<s
         match maybe_parser_src with
         | Some(parser, src) ->
             match parseTemplateContent lexer src env with
-            | Some(parser_rest, src) -> Some((parser >>>> SemiColonParser >>>> parser_rest), src)
+            | Some(parser_rest, src) -> Some((parser >>>> semi_colon_parser >>>> parser_rest), src)
             | _ -> None
         | _ -> None
 
     // Execution starts here.        
     match lexer.NextToken src with
-    | Some(CBRACE, src) -> Some(EmptyDataParser, src)
+    | Some(CBRACE, src) -> Some(empty_data_parser, src)
     | Some(WORD, src) -> mkIntItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(DWORD, src) -> mkIntItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
     | Some(SWORD, src) -> mkIntItemParser src |> lexer.MaybeExpect [SEMICOLON] |> next
