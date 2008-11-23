@@ -33,6 +33,9 @@
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <StartArguments>-f "C:\Documents and Settings\johann\Skrivbord\formula1\formula1.X"</StartArguments>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <StartArguments>-f "C:\Documents and Settings\johann\Skrivbord\formula1\formula1.X"</StartArguments>
+  </PropertyGroup>
   <ItemGroup>
     <None Include="TextLexer.fsl" />
     <Compile Include="XLexers.fs" />
