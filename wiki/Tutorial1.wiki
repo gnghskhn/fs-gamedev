@@ -24,7 +24,15 @@ This includes a library containing the function called at the end to wait for a 
 {{{
 printf "Hello world\n"
 }}}
-Prints Hello world on the console.
+Prints Hello world on the console, and goes to the next line.
+
+An alternative would have been to use:
+{{{
+printfn "Hello world"
+}}}
+
+The two differ in that the first uses a UNIX-style of end-of-line, while the second uses the end-of-line of your environment. Personally I prefer to have one type end of lines regardless of the system on which the program runs, but that probably does not fit everyone's needs.
+
 
 {{{
 Console.ReadKey(true)
