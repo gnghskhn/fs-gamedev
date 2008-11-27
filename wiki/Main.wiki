@@ -7,3 +7,7 @@
   * [Tutorial5]: Naive RK4
   * [Tutorial6]: Concurrency
   * [Tutorial7]: Optimized RK4
+  * [Tutorial8]: Generic programming
+  * [Tutorial9]: Efficient generic programming
+  * [Tutorial10]: Parsing DirectX .X files
+  * [Tutorial11]: A generic scene graph library
