@@ -79,11 +79,13 @@ let average2_Vec3d = average2 scale_Vec3d plus_Vec3d (Some add6)
 let average2_Vec3d' = average2 scale_Vec3d plus_Vec3d None
 }}}
 
-However, using partial application and closures, we can help the F# compiler generate the code we want, i.e. remove the test for add6. See for yourself in the screenshots of reflector, below:
+However, using partial application and closures, we can help the F# compiler generate the code we want, i.e. remove the test for add6. See for yourself in the screenshots of reflector, below.
 
-<img src="http://2.bp.blogspot.com/_nDGpBaX7_xg/SPuXdlq2AmI/AAAAAAAAAXs/8lGRQsx_Fnw/s1600-h/FS-Tut11b-1.PNG"/>
+With `add6`:
+<img src="http://3.bp.blogspot.com/_nDGpBaX7_xg/STFm1pONmcI/AAAAAAAAAfo/yUVps0xG7WY/s1600-h/FS-Tut11b-1.png"/>
 
-<img src="http://4.bp.blogspot.com/_nDGpBaX7_xg/SPuYqHieUZI/AAAAAAAAAX0/l3Y4C-nIKOQ/s1600-h/FS-Tut11b-2.PNG"/>
+Without using `add6`:
+<img src="http://2.bp.blogspot.com/_nDGpBaX7_xg/STFm_lQs8rI/AAAAAAAAAfw/ZCoihkiUt_Y/s1600-h/FS-Tut11b-2.png"/>
 
 == A negative note ==
 
