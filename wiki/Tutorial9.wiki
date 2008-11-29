@@ -82,10 +82,12 @@ let average2_Vec3d' = average2 scale_Vec3d plus_Vec3d None
 However, using partial application and closures, we can help the F# compiler generate the code we want, i.e. remove the test for add6. See for yourself in the screenshots of reflector, below.
 
 With `add6`:
-<img src="http://3.bp.blogspot.com/_nDGpBaX7_xg/STFm1pONmcI/AAAAAAAAAfo/yUVps0xG7WY/s1600-h/FS-Tut11b-1.png"/>
+http://3.bp.blogspot.com/_nDGpBaX7_xg/STFm1pONmcI/AAAAAAAAAfo/yUVps0xG7WY/s1600-h/FS-Tut11b-1.png
 
-Without using `add6`:
-<img src="http://2.bp.blogspot.com/_nDGpBaX7_xg/STFm_lQs8rI/AAAAAAAAAfw/ZCoihkiUt_Y/s1600-h/FS-Tut11b-2.png"/>
+Without `add6`:
+http://2.bp.blogspot.com/_nDGpBaX7_xg/STFm_lQs8rI/AAAAAAAAAfw/ZCoihkiUt_Y/s1600-h/FS-Tut11b-2.png
+
+*Note* images don't show up, I don't know why >:(
 
 == A negative note ==
 
@@ -116,3 +118,12 @@ let average_Vec3d' = average {Vec3d_ops with add6 = None}
 The problem is that the resulting code is not optimized (using the currently available version of the F# compiler, 1.9.6.2). It seems that in order to be sure the compiler produces optimized code, one must stay away from dictionary of operations. I think it's a shame, but maybe that's an issue that will be addressed in future versions of the compiler.
 
 == Conclusion ==
+
+I get a 25% performance boost thanks to "add6" when using 3d vectors. On the other hand, I get a 65% performance drop when summing floats. This seems to be a clear case where tailoring generic code to specific types really helps to achieve the best performance.
+
+Time to conclude the part of these tutorials dedicated to generic programming and low-level optimization.
+
+To summarize:
+1) Avoid curried functions when performance is critical, especially for methods.
+2) Inline generic functions to avoid indirect calls to operations. However, do not take the habit of inlining all small functions. The compiler or the CLR do that for you.
+3) Keep dictionaries of operations small, or avoid them altogether. Alternatives include static [http://sharp-gamedev.blogspot.com/2008/09/tutorial-9-generic-programming-using.html type constraints], or function parameters.
