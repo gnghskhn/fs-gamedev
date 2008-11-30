@@ -82,7 +82,7 @@ let average2_Vec3d' = average2 scale_Vec3d plus_Vec3d None
 However, using partial application and closures, we can help the F# compiler generate the code we want, i.e. remove the test for add6. See for yourself in the screenshots of reflector, below.
 
 With `add6`:
-<img src="http://picasaweb.google.com/lh/photo/vuJIaEcBC-wZmztjvLy5hQ?authkey=0XdPfFUdSxM"/>
+http://picasaweb.google.com/lh/photo/vuJIaEcBC-wZmztjvLy5hQ?authkey=0XdPfFUdSxM&dummy=.png
 
 Without `add6`:
 <img src="http://picasaweb.google.com/lh/photo/Ko72o4Cxf9r5cDQiAFEUyw?authkey=0XdPfFUdSxM"/>
