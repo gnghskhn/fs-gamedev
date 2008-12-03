@@ -124,6 +124,6 @@ I get a 25% performance boost thanks to "add6" when using 3d vectors. On the oth
 Time to conclude the part of these tutorials dedicated to generic programming and low-level optimization.
 
 To summarize:
-1) Avoid curried functions when performance is critical, especially for methods.
-2) Inline generic functions to avoid indirect calls to operations. However, do not take the habit of inlining all small functions. The compiler or the CLR do that for you.
-3) Keep dictionaries of operations small, or avoid them altogether. Alternatives include static [http://sharp-gamedev.blogspot.com/2008/09/tutorial-9-generic-programming-using.html type constraints], or function parameters.
+  # Avoid curried functions when performance is critical, especially for methods.
+  # Inline generic functions to avoid indirect calls to operations. However, do not take the habit of inlining all small functions. The compiler or the CLR do that for you.
+  # Keep dictionaries of operations small, or avoid them altogether. Alternatives include static [http://sharp-gamedev.blogspot.com/2008/09/tutorial-9-generic-programming-using.html type constraints], or function parameters.
