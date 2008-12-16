@@ -75,7 +75,7 @@ Another type definition: This is the signature of functions turning file content
   * nothing, if there was an error while reading the source, or if the source is ill-formatted.
 
 Typically, the source contains information about the file being read, and where the 'head' points inside the file.
-The lexer is expected to return a the source it was passed, with the difference that the position is updated to point after the token that was just read.
+The lexer is expected to return the source it was passed, with the difference that the new position points after the token that was just read.
 
 {{{
 let expect nextToken (src : 'Src) (tokens : Token list) =
@@ -91,19 +91,29 @@ let expect nextToken (src : 'Src) (tokens : Token list) =
 
 The function `expect` takes a lexer (somewhat misleadingly called `nextToken`), a source and a list of expected tokens. It checks that the sequence of tokens extracted from the source matches the expected list, then returns the source, pointing after the sequence of tokens. If the lexer returned a token which was not expected, or reached the end of the source too early, `None` is returned.
 
+You may wonder why `nextToken` returns a modified copy of the source it received. The traditional way of doing things modifies the source being passed as an argument, and returns the parsed token or an error code. The method used here avoids the side effect, which is both elegant and practical if you want to be able to do something like:
+
 {{{
-let maybeExpect nextToken (tokens : Token list) (in_data : ('a * 'Src) option) =
-    match in_data with
-    | Some(smthing, src) ->
-        match expect nextToken src tokens with
-        | Some(src) -> Some(smthing, src)
-        | None -> None
-    | None -> None
+   (* Get next token, but ignore SomeTokenToIgnore *)
+   let token, source = nextToken in_file
+   let really_token, source2 =
+      if token == SomeTokenToIgnore then nextToken source
+      else token, source
 }}}
 
-This is a convenience function. It does the same as `expect`, with the addition that it takes some data `in_data`, composed of any kind of data `'a` and a source.
-It returns the `'a` data and the updated source if `expect` succeeds, or None otherwise.
-This function somewhat helps to improve the readability of the code of XParser.fs.
+Another example:
+
+{{{
+   (* For backward compatibility reasons, try to parse using the old parser.
+      If we fail, use the new parser, which uses a different syntax *)
+   let parse_attempt1 = oldParser in_file
+   let final_attempt =
+      match parse_attempt1 with
+      | None -> newParser in_file
+      | _ -> parse_attempt1
+}}}
+
+You can do that because `in_file` does not change after calling `nextToken`.
 
 TBC...
 == Conclusion ==
