@@ -233,7 +233,7 @@ This function is the top-level parsing function. It parses the first part of an 
 
 The local function `loop` repeatedly reads data from the file, parsing the data it reads as data structure declarations. When `parseTemplate`, the function parsing data structures, returns `None`, `loop` returns the result of the successful part of parsing.
 
-The rest of `parse` continues the parsing process, _where successful parsing of data structures stopped_. Note that this would have been trickier to do using a stateful lexer and file reader: By the time `parseTemplate` notices that it's not parsing a data structure declaration, several tokens may already been read and discarded. To solve this problem, one must leave a `bookmark` in the file reader after each successful parsing of a data structure declaration, which is easily and elegantly done when using stateless lexing: just keep around the `src` variable used when parsing failed.
+The rest of `parse` continues the parsing process, _where successful parsing of data structures stopped_. Note that this would have been trickier to do using a stateful lexer and file reader: By the time `parseTemplate` notices that it's not parsing a data structure declaration, several tokens may already been read and discarded. To solve this problem, one must leave a 'bookmark' in the file reader after each successful parsing of a data structure declaration, which is easily and elegantly done when using stateless lexing: just keep around the `src` variable used when parsing failed.
 
 === Writing a parser manually ===
 
