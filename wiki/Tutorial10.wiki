@@ -6,11 +6,12 @@ This tutorial shows how to parse .X files, which are used for 3d models and scen
 
 Be aware that the code in this tutorial is not fully functional. For instance, error reporting is kept to a minimum (error *detecting* is handled, though)
 
-This tutorial demonstrates the following:
+This tutorial demonstrates the following concepts:
   * Discriminated unions and simple pattern matching
-  * Error handling using the `option` type
-  * Hiding side-effects in IO operations
+  * Stateless lexing
+  * Hiding side effects in IO operations
   * Writing a lexer using fslex
+  * Error handling using the `option` type
   * Writing a parser manually
   * Building functions at run-time by combining basic functions
 
@@ -41,7 +42,11 @@ It is organized into the following modules:
   * *XParsers.fs* The parser.
   * *Program.fs* Entry point for the application.
 
-=== XLexers.fs ===
+The rest of this section illustrates each concept.
+
+=== Discriminated unions ===
+
+From XLexers.FS:
 
 {{{
 type Token =
@@ -73,6 +78,10 @@ type Token =
 This defines a _discriminated union_. A variable of type `Token` can be a `NAME`, in which case its value is a `string`, or a `INTEGER`, in which case its value is an `int`, and so on...
 
 `NAME` and `INTEGER` are called _discriminators_, and are used to identify the actual type of a variable of type `Token`.
+
+=== Stateless lexing ===
+
+From XLexers.FS:
 
 {{{
 type Lexer<'Src> = 'Src -> (Token * 'Src) option
@@ -123,5 +132,67 @@ Another example:
 
 You can do that because `in_file` does not change after calling `nextToken`.
 
-TBC...
+There is an open problem, though. Designing the interface of a lexer that encapsulates the state of the file from which it reads is easy, but may well be unusable. After all, most IO APIs are based on side-effects. The next section shows a solution to this problem.
+
+=== Hiding side effects in IO operations ===
+
+From Program.fs:
+
+{{{
+open TextLexer
+open System.IO
+open Microsoft.FSharp.Text.Lexing
+
+let tokenStream filename =
+    seq {
+        use stream = File.OpenRead(filename)
+        use reader = new StreamReader(stream)
+        reader.ReadLine() |> ignore
+        let lexbuf = Lexing.from_text_reader (new System.Text.ASCIIEncoding()) reader
+        while not lexbuf.IsPastEndOfStream do
+            match TextLexer.token lexbuf with
+            | XLexers.EOF as value -> yield! [value]
+            | token -> yield token
+        }
+    |> LazyList.of_seq
+}}}
+
+This function takes the name of file to read.
+
+It creates a _sequence expression_, that is a piece of code that generates items in a sequence. Sequences are abstract types which can be converted to concrete lists, arrays. They can also be evaluated lazily, which means that the content of the sequence is not instantiated at once when the sequence is created. Instead, items are created on demand.
+In the example above, the sequence is turned into a lazy list. Lazy lists are similar to normal lists, with the difference that items are created when needed.
+
+This sequence expression does the following:
+  # Opens the file to read
+  # Creates a stream reader to read from this file
+  # The first line is retrieved, and ignored
+  # A lexer, generated using fslex, is instantiated; it will read from the stream reader
+  # The lexer reads tokens one by one, building a sequence of tokens, until the end of the file is reached
+
+Note that the last step does not actually read the entire file at once. Instead, each iteration will be executed when a new token is needed, at which point execution continues in the main program.
+
+The type `seq` (which is instantiated by the sequence expression) is similar to the type `list`. It has operations allowing to retrieve items, but unlike `list`, it does not allow pattern-matching. This minor issue is easily solved by converting the sequence to a `LazyList`. The following is now possible:
+
+{{{
+// A lexer working on a lazy list of Tokens. The list is constructed on the fly as the file is read
+let nextTokenLazyList (debug : bool) (src : LazyList<XLexers.Token>) =
+    match src with
+    | LazyList.Nil -> None
+    | LazyList.Cons(head, rest) ->
+        if debug then printfn "%A" head;
+        Some(head, rest)
+}}}
+
+This function takes an argument controlling whether debug info is printed, and a lazy list of tokens from which tokens are read and returned, one by one.
+
+Note that calling `nextTokenLazyList` twice with the same argument will produce the same result, as one would expect from a pure function.
+   
+=== Writing a lexer using fslex ===
+
+=== Error handling using the `option` type ===
+
+=== Writing a parser manually ===
+
+=== Building functions at run time ===
+
 == Conclusion ==
