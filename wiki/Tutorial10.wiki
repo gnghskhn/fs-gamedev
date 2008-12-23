@@ -169,6 +169,8 @@ This sequence expression does the following:
   # A lexer, generated using fslex, is instantiated; it will read from the stream reader
   # The lexer reads tokens one by one, building a sequence of tokens, until the end of the file is reached
 
+Individual items are produced using `yield`, chunks of items can be produced at once using `yield!`.
+
 Note that the last step does not actually read the entire file at once. Instead, each iteration will be executed when a new token is needed, at which point execution continues in the main program.
 
 The type `seq` (which is instantiated by the sequence expression) is similar to the type `list`. It has operations allowing to retrieve items, but unlike `list`, it does not allow pattern-matching. This minor issue is easily solved by converting the sequence to a `LazyList`. The following is now possible:
@@ -189,7 +191,49 @@ Note that calling `nextTokenLazyList` twice with the same argument will produce 
    
 === Writing a lexer using fslex ===
 
+See TextLexer.fsl for an example. I won't go into further details here. If you are familiar with lex you should not have difficulties sorting out this file. Otherwise, you may want to look into one of the many tutorials available on lex on the net, for instance http://epaperpress.com/lexandyacc/. This tool was originally written for the C programming language, and derivatives were made for almost all new programming languages that came after C.
+
 === Error handling using the `option` type ===
+
+A common way to handle errors is to use the special value `null`. For instance, functions allocating memory return a reference to a newly allocated chunk of memory, or `null` if the allocation failed, maybe due to a lack of available memory. Although convenient, this trick has introduced a family of bugs, so-called null-pointer exceptions, which occur when trying to use a reference which is actually `null`. 
+
+The `option` type in F# is used where the special value `null` is typically used in other languages. It can be seen as a parametrized discriminated union:
+
+{{{
+type Option<'T> =
+  | None
+  | Some of 'T
+}}}
+
+For efficiency reasons, the F# compiler replaces instances of `option` by `null` and valid references.
+
+The point of `option` is that it makes it possible to write code that is safe with respect to null-pointer exceptions.
+
+Here is an example illustrating the use of `option`:
+{{{
+// Parse the entire file.
+let parse (lexer : LexerFuncs<'Src>) src : (string option * Record) list option =
+    // Function parsing all templates
+    let rec loop src parsers =
+        match parseTemplate lexer src parsers with
+        | Some(parsers, src) -> loop src parsers
+        | None -> parsers, src
+    
+    // First parse all templates
+    let env, src = loop src Map.empty
+    
+    // Then parse the data
+    let r = parseData lexer src env
+    match r |> lexer.MaybeExpect [EOF] with
+    | Some(value, _) -> Some value
+    | None -> None
+}}}
+
+This function is the top-level parsing function. It parses the first part of an .X file, which contains the declarations of data structures. The .X file format does not have an explicit separator between the two parts, which means that one basically has to try and read the first part until it fails, at which point an attempt to read the second part can be made.
+
+The local function `loop` repeatedly reads data from the file, parsing the data it reads as data structure declarations. When `parseTemplate`, the function parsing data structures, returns `None`, `loop` returns the result of the successful part of parsing.
+
+The rest of `parse` continues the parsing process, _where successful parsing of data structures stopped_. Note that this would have been trickier to do using a stateful lexer and file reader: By the time `parseTemplate` notices that it's not parsing a data structure declaration, several tokens may already been read and discarded. To solve this problem, one must leave a `bookmark` in the file reader after each successful parsing of a data structure declaration, which is easily and elegantly done when using stateless lexing: just keep around the `src` variable used when parsing failed.
 
 === Writing a parser manually ===
 
