@@ -2,11 +2,19 @@
 
 == Introduction ==
 
-This tutorial shows how to parse .X files, which are used for 3d models and scenes. Note that DirectX offers convenient functions to manipulate these files.
+This tutorial shows how to parse .X files, which are used for 3d models and scenes. Note that DirectX offers convenient functions to manipulate these files, meaning that the practical usefulness of the code in this tutorial is limited, unless you don't have access to DirectX.
 
-Be aware that the code in this tutorial is not fully functional. Some of its limitations include poor error reporting and producing a raw representation of the content of the file which is not easily directly usable.
+Be aware that the code in this tutorial is not fully functional. For instance, error reporting is kept to a minimum (error *detecting* is handled, though)
 
-Nevertheless, writing this code was an educational experience, and programmers writing games on platforms where DirectX is not available may find this code useful.
+This tutorial demonstrates the following:
+  * Simple pattern matching
+  * Error handling using the `option` type
+  * Hiding side-effects in IO operations
+  * Writing a lexer using fslex
+  * Writing a parser manually
+  * Building functions at run-time by combining basic functions
+
+The content of this tutorial is somewhat more dense than usual.
 
 === The .X format ===
 
