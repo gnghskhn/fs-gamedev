@@ -7,7 +7,7 @@ This tutorial shows how to parse .X files, which are used for 3d models and scen
 Be aware that the code in this tutorial is not fully functional. For instance, error reporting is kept to a minimum (error *detecting* is handled, though)
 
 This tutorial demonstrates the following:
-  * Simple pattern matching
+  * Discriminated unions and simple pattern matching
   * Error handling using the `option` type
   * Hiding side-effects in IO operations
   * Writing a lexer using fslex
