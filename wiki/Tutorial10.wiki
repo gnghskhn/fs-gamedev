@@ -94,6 +94,7 @@ Typically, the source contains information about the file being read, and where 
 The lexer is expected to return the source it was passed, with the difference that the new position points after the token that was just read.
 
 
+
 {{{
 let expect nextToken (src : 'Src) (tokens : Token list) =
     let rec work src tokens =
@@ -387,3 +388,28 @@ Parsing text using `my_parser` is done as shown here:
 }}}
 
 == Conclusion ==
+
+This tutorial exposes a number of features and techniques that were new in these series. It may therefore seem a bit excessively dense. In my opinion, the key feature resides in the choice of architecture. It was clear parsing would have to be split in two stages: first parse the data structure definitions, then the structured data itself.
+I had initially designed the first parser to produce information describing the data structure. The second parser would basically be composed of a large selection on the type of expected data:
+
+{{{
+    let expected_data = ...
+
+    let new_data =
+        match expected_data with
+        | INT -> parseInt lexer src data
+        | STRING -> parseString lexer src data
+        | FLOAT -> parseFloat lexer src data
+        ...
+}}}
+
+I think my second design, presented here, leads to a much more elegant second-stage parser:
+
+{{{
+    let parser = ...
+
+    let new_data =
+        parser lexer src data
+}}}
+
+In my implementation, the first-stage parser is located in function `parseTemplateContent` in [http://code.google.com/p/fs-gamedev/source/browse/trunk/Tutorial013/XParser.fs?r=40#228 XParser.fs]. I reckon it is somewhat hard to read, mostly because of its length. Although I have not implemented my initial idea, I expect both the first and second-stage parsers would be equally large. The second-stage parser shown in the source code of this tutorial is considerably shorter.
