@@ -273,4 +273,9 @@ type DataParser<'Src> = Env<'Src> -> LexerFuncs<'Src> -> 'Src -> Record -> (Reco
 and Env<'Src> = Map<string, DataParser<'Src>>
 }}}
 
+=== Building functions at run-time by combining basic functions ===
+
+From XParser.fs
+
+
 == Conclusion ==
