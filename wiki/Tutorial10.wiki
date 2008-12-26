@@ -10,8 +10,8 @@ This tutorial demonstrates the following concepts:
   * Discriminated unions and simple pattern matching
   * Stateless lexing
   * Hiding side effects in IO operations
-  * Writing a lexer using fslex
   * Error handling using the `option` type
+  * Defining mutually and self dependent types
   * Building functions at run-time by combining basic functions
 
 The content of this tutorial is somewhat more dense than usual.
@@ -190,7 +190,7 @@ Note that calling `nextTokenLazyList` twice with the same argument will produce 
    
 === Writing a lexer using fslex ===
 
-See TextLexer.fsl for an example. I won't go into further details here. If you are familiar with lex you should not have difficulties sorting out this file. Otherwise, you may want to look into one of the many tutorials available on lex on the net, for instance http://epaperpress.com/lexandyacc/. This tool was originally written for the C programming language, and derivatives were made for almost all new programming languages that came after C.
+See TextLexer.fsl for an example. This tutorial will not go into further details. If you are familiar with lex you should not have difficulties understanding the content of this file. Otherwise, you may want to look into one of the many tutorials available on lex on the net, for instance http://epaperpress.com/lexandyacc/. This tool was originally written for the C programming language, and derivatives were made for almost all new programming languages that came after C.
 
 === Error handling using the `option` type ===
 
@@ -234,6 +234,43 @@ The local function `loop` repeatedly reads data from the file, parsing the data 
 
 The rest of `parse` continues the parsing process, _where successful parsing of data structures stopped_. Note that this would have been trickier to do using a stateful lexer and file reader: By the time `parseTemplate` notices that it's not parsing a data structure declaration, several tokens may already been read and discarded. To solve this problem, one must leave a 'bookmark' in the file reader after each successful parsing of a data structure declaration, which is easily and elegantly done when using stateless lexing: just keep around the `src` variable used when parsing failed.
 
-=== Building functions at run time ===
+The common mistake when using `null` is to use a pointer or reference without checking it first. Performing exactly those checks which are necessary is non-trivial to implement once, and even harder to maintain. Using a discriminated union has the advantage that the 'nullness' of references becomes a static property made explicit in the syntax. A program with missing checks for `None` cannot be successfully compiled.
+
+=== Mutual and self dependent types ===
+
+From XParser.fs:
+
+{{{
+type Record = {
+    type_name  : string
+    components : Map<string, obj>
+    children   : SubRecord list
+}
+and SubRecord =
+    | RefByName of string
+    | RefByUUID of string           // Not implemented
+    | FullRef   of string * string  // Not implemented
+    | Nested    of Record
+}}}
+
+This defines two types, `Record` and `SubRecord`, which are mutually dependent. This type is used when parsing the second part of the file to store the data.
+
+{{{
+type DataParser<'Src> = DataParser of (Env<'Src> -> LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) option)
+and Env<'Src> = Map<string, DataParser<'Src>>
+}}}
+
+This defines a type `DataParser` which is parametrized by the type of source from which tokens are extracted. Concretely, this type is used with a lazy list. A `DataParser` is basically a function which takes a lexer, a source, a record, and returns `None` or a new record and a new source.
+The new record is the record passed as argument, extended with the data that was just passed.
+I have omitted `Env<'Src>`, which a type used to hold all DataParsers produced so far. Data in .X files is organized as objects which can be nested, which means that DataParsers may need to use other DataParsers to parse nested objects.
+
+These two pieces of code illustrate how to declare mutually dependent types: simply use keyword `and` instead of `type` in all but the first declaration.
+
+The second example shows a trick allowing to define types which depend on themselves. The trick consists of wrapping the type in a discriminated union. The F# compiler rejects the following code, which lacks the discriminated union:
+
+{{{
+type DataParser<'Src> = Env<'Src> -> LexerFuncs<'Src> -> 'Src -> Record -> (Record * 'Src) option
+and Env<'Src> = Map<string, DataParser<'Src>>
+}}}
 
 == Conclusion ==
