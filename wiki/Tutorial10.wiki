@@ -93,6 +93,7 @@ Another type definition: This is the signature of functions turning file content
 Typically, the source contains information about the file being read, and where the 'head' points inside the file.
 The lexer is expected to return the source it was passed, with the difference that the new position points after the token that was just read.
 
+
 {{{
 let expect nextToken (src : 'Src) (tokens : Token list) =
     let rec work src tokens =
@@ -277,5 +278,112 @@ and Env<'Src> = Map<string, DataParser<'Src>>
 
 From XParser.fs
 
+{{{
+type ComponentParser<'Src> = Env<'Src> -> LexerFuncs<'Src> -> 'Src -> (obj * 'Src) option
+}}}
+
+This type, similar to `DataParser`, represents functions which parse text from the second part of an .X file, to extract data. `Record`, which is used by `DataParser`, represents composite data. `obj`, which is the standard basic type of all objects in F#, is used by `ComponentParser` to represent data which is itself part of other data.
+
+{{{
+// Does no parsing, return the record untouched
+let empty_data_parser : DataParser<'Src> =
+    let f _ lexer src record = Some(record, src)
+    DataParser f
+
+
+// Parses a ";", returns the record untouched
+let semi_colon_parser : DataParser<'Src> =
+    let f  _ (lexer : LexerFuncs<'Src>) src record =
+        match lexer.Expect src [SEMICOLON] with
+        | Some(src) -> Some(record, src)
+        | None -> None
+    DataParser f
+}}}
+
+These two functions are examples of simple `DataParser`s which don't do much. 
+
+{{{
+// Parses an int, returns it, boxed.            
+let int_parser : ComponentParser<'Src> =
+    fun _ lexer src ->
+        match lexer.NextToken src with
+        | Some(INTEGER(value), src) -> Some (box value, src)
+        | _ -> None
+
+        
+// Parses a float, returns it, boxed.             
+let float_parser : ComponentParser<'Src> =
+    fun _ lexer src ->
+        match lexer.NextToken src with
+        | Some(FLOATVAL(value), src) -> Some (box value, src)
+        | _ -> None
+
+        
+// Parses a string, returns it, boxed.             
+let string_parser : ComponentParser<'Src> =
+    fun _ lexer src ->
+        match lexer.NextToken src with
+        | Some(STRING(value), src) -> Some(box value, src)
+        | _ -> None
+}}}
+
+The functions above are `ComponentParser`s. They could have equivalently been defined using the more common syntax:
+
+{{{
+// Parses an int, returns it, boxed.            
+let parseInt _ lexer src : ComponentParser<'Src> =
+    match lexer.NextToken src with
+    | Some(INTEGER(value), src) -> Some (box value, src)
+    | _ -> None
+}}}
+
+The first form can be seen as a variable holding a function, whereas the second form directly defines a function. The first form was chosen to reflect the fact that these functions are treated as data.
+
+{{{
+// Turn a ComponentParser to a DataParser. The boxed value is added in the Record with name 'name'        
+let convertComponentToDataParser name (comp_parser_func : ComponentParser<'Src>) : DataParser<'Src> =
+    fun env lexer src (record : Record) ->
+        match comp_parser_func env lexer src with
+        | Some(value, src) -> Some(record.Add(name, value), src)
+        | None             -> None
+    |> DataParser
+}}}
+
+As the comment says, this function converts a `ComponentParser` into a `DataParser`.
+
+`DataParser`s can then be composed to build more complex parsers using the functions below.
+
+{{{
+// Makes a parser that executes two parsers one after another.                
+let composeDataParsers (parser1 : DataParser<'Src>) (parser2 : DataParser<'Src>) : DataParser<'Src> =
+    let f env lexer src record =
+        match parser1, parser2 with
+        | DataParser(parser1), DataParser(parser2) ->
+            match parser1 env lexer src record with
+            | Some(record, src) -> parser2 env lexer src record
+            | None              -> None
+    DataParser f
+
+
+// Infix operator for composeDataParsers   
+let (>>>>) parser1 parser2 =
+    composeDataParsers parser1 parser2
+}}}
+
+In order to parse an int, followed by a semi-colon, an `int_parser` can be combined with a `semi_colon_parser`:
+
+{{{
+    let my_parser = int_parser >>>> semi_colon_parser
+}}}
+
+Parsing text using `my_parser` is done as shown here:
+
+{{{
+    let env : Env<'Src> = ...
+    let lexer : LexerFuncs<'Src> = ...
+    let src : 'Src = ...
+
+    my_parser env lexer src (Record.empty.SetName(name))
+}}}
 
 == Conclusion ==
